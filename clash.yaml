@@ -7,6 +7,7 @@ rules:
     - 'DOMAIN-KEYWORD,-cn,DIRECT'
     - 'GEOIP,CN,DIRECT'
     - 'DOMAIN-KEYWORD,z-library,TapFog'
+    - 'DOMAIN-SUFFIX,chdbits.co,TapFog'
     - 'DOMAIN-KEYWORD,shuaito,TapFog'
     - 'DOMAIN-SUFFIX,gist.githubusercontent.com,TapFog'
     - 'DOMAIN-SUFFIX,tapfog.com,TapFog'
