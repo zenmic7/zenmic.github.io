@@ -8,7 +8,7 @@ WidgetMetadata = {
   requiredVersion: "0.0.1",
   description: "One源付费视频源，需要token口令",
   author: "Zen",
-  site: "https://github.com/2kuai/ForwardWidgets",
+  site: "https://github.com/zenmic7/zenmic.github.io/tree/ForwardWidget",
   globalParams: [
     {
       name: "token",
