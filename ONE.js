@@ -4,7 +4,7 @@ WidgetMetadata = {
   id: "one_vod_pro",
   title: "ONE+",
   icon: "https://assets.vvebo.vip/scripts/icon.png",
-  version: "2.0.0",
+  version: "1.0.0",
   requiredVersion: "0.0.2",
   description: "获取One付费资源",
   author: "Zen",
@@ -234,7 +234,7 @@ async function loadResource(params) {
       const playInfo = await getOneSourcePlayInfo(targetEpisode.episodeDetailURL);
       if (playInfo && playInfo.url) {
         results.push({
-          name: "One源",
+          name: "ONE",
           description: `${bestMatch.title} - ${targetEpisode.title}`,
           url: playInfo.url
         });
