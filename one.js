@@ -8,7 +8,7 @@ WidgetMetadata = {
   requiredVersion: "0.0.1",
   description: "One源付费视频源，需要token口令",
   author: "Zen",
-  site: "https://github.com/zenmic7/zenmic.github.io/tree/ForwardWidget",
+  site: "https://github.com/2kuai/ForwardWidgets",
   globalParams: [
     {
       name: "token",
@@ -22,15 +22,6 @@ WidgetMetadata = {
       title: "源站地址",
       type: "input",
       value: "https://vod.infiniteapi.com"
-    },
-    {
-      name: "enableSearch",
-      title: "启用搜索",
-      type: "enumeration",
-      enumOptions: [
-        { title: "启用", value: "enabled" },
-        { title: "禁用", value: "disabled" }
-      ]
     }
   ],
   modules: [
@@ -78,10 +69,6 @@ function argsify(data) {
     }
   }
   return data;
-}
-
-function jsonify(data) {
-  return typeof data === 'string' ? data : JSON.stringify(data);
 }
 
 // --- 主要功能函数 ---
@@ -175,9 +162,9 @@ async function loadResource(params) {
 }
 
 async function search(params) {
-  const { keyword, token, site, enableSearch } = params;
+  const { keyword, token, site } = params;
   
-  if (enableSearch !== "enabled" || !keyword || !keyword.trim()) {
+  if (!keyword || !keyword.trim()) {
     return [];
   }
   
@@ -197,14 +184,17 @@ async function search(params) {
       return [];
     }
     
-    // 转换为Forward需要的格式
+    // 转换为Forward期望的搜索卡片格式
     const results = searchList.map(item => ({
-      name: "One源",
-      description: `${item.title}${item.descriptionText ? ' - ' + item.descriptionText : ''}`,
-      _meta: {
-        title: item.title,
-        cover: item.coverURLString,
-        detailUrl: item.detailURLString
+      id: String(item.id || Date.now() + Math.random()), // 确保id是字符串且唯一
+      title: item.title || "",
+      description: item.descriptionText || "",
+      cover: item.coverURLString || "",
+      type: "video",
+      ext: {
+        url: item.detailURLString || "",
+        detailUrl: item.detailURLString || "",
+        title: item.title || ""
       }
     }));
     
@@ -273,31 +263,4 @@ function getBestMatch(list, seriesName, season, type) {
   
   // 4. 返回第一个结果
   return list[0];
-}
-
-// 可选：添加分类获取功能（如果需要）
-async function getCategories(params) {
-  const { token, site } = params;
-  
-  if (!token) return [];
-  
-  try {
-    const url = `${site}/${token}/one_plugin?param=`;
-    const res = await Widget.http.get(url, {
-      headers: { 'User-Agent': UA }
-    });
-    
-    const data = argsify(res.data);
-    const pages = data.pages || [];
-    
-    return pages.map(page => ({
-      id: page.url,
-      name: page.title,
-      url: page.url
-    }));
-    
-  } catch (error) {
-    console.error(`获取分类失败: ${error.message}`);
-    return [];
-  }
 }
