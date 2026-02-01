@@ -331,7 +331,7 @@ async function loadResource(params) {
     
     // 返回结果（现在只返回基本信息，不获取播放地址）
     return [{
-      name: "ONE源",
+      name: "ONE",
       description: `${bestMatch.title} - 点击查看详情`,
       url: bestMatch.ext.detailUrl, // 这里是详情页URL，不是播放地址
       ext: {
