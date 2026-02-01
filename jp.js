@@ -1,12 +1,12 @@
 WidgetMetadata = {
   id: "jianpian_vod_full",
-  title: "荐片影视",
+  title: "荐片",
   icon: "https://assets.vvebo.vip/scripts/icon.png",
   version: "1.0.0",
   requiredVersion: "0.0.2",
   description: "荐片影视在线资源获取",
-  author: "两块",
-  site: "https://github.com/2kuai/ForwardWidgets",
+  author: "Zen",
+  site: "https://github.com/zenmic7",
   globalParams: [
     {
       name: "multiSource",
