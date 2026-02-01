@@ -4,11 +4,11 @@ WidgetMetadata = {
   id: "czzymovie",
   title: "厂长资源",
   icon: "https://assets.vvebo.vip/scripts/icon.png",
-  version: "1.1.0",
+  version: "1.0.0",
   requiredVersion: "0.0.1",
   description: "获取厂长资源影片资源",
-  author: "两块",
-  site: "https://github.com/2kuai/ForwardWidgets",
+  author: "Zen",
+  site: "https://github.com/zenmic7",
   globalParams: [
     {
       name: "site",
@@ -118,21 +118,14 @@ async function loadResource(params) {
       timeout: 10000
     });
     
-    // 4. 从详情页提取播放页面链接
-    const playPageUrl = extractPlayPageUrl(detailRes.data, site);
-    
-    if (!playPageUrl) {
-      return [];
-    }
-    
-    // 5. 从播放页面提取实际播放地址
-    const playUrl = await extractRealPlayUrl(playPageUrl, site);
+    // 4. 提取播放地址
+    const playUrl = extractPlayUrl(detailRes.data, site);
     
     if (!playUrl) {
       return [];
     }
     
-    // 6. 返回结果
+    // 5. 返回结果
     return [{
       name: "厂长资源",
       description: `${bestMatch.title}${bestMatch.remarks ? ' - ' + bestMatch.remarks : ''}`,
@@ -188,133 +181,34 @@ async function search(params) {
   }
 }
 
-// --- 提取播放页面URL ---
-function extractPlayPageUrl(html, site) {
+// --- 提取播放地址的简化版本 ---
+function extractPlayUrl(html, site) {
   try {
-    // 尝试从播放列表按钮中提取
-    const playBtnRegex = /<div[^>]*class="paly_list_btn"[^>]*>([\s\S]*?)<\/div>/;
-    const match = html.match(playBtnRegex);
-    
-    if (match) {
-      const linkRegex = /<a[^>]*href="([^"]+)"[^>]*>/;
-      const linkMatch = match[1].match(linkRegex);
-      
-      if (linkMatch && linkMatch[1]) {
-        const url = linkMatch[1];
-        return url.startsWith('http') ? url : `${site}${url}`;
-      }
-    }
-    
-    // 如果没有找到，尝试其他方法
-    const urlPatterns = [
-      /<a[^>]*href="(https?:\/\/[^"]+v_play[^"]+)"/,
-      /<a[^>]*href="(\/v_play[^"]+)"/,
-      /iframe[^>]*src="([^"]+)"/
-    ];
-    
-    for (const pattern of urlPatterns) {
-      const patternMatch = html.match(pattern);
-      if (patternMatch && patternMatch[1]) {
-        const url = patternMatch[1];
-        return url.startsWith('http') ? url : `${site}${url}`;
-      }
-    }
-    
-    return null;
-    
-  } catch (error) {
-    console.error(`提取播放页面URL失败: ${error.message}`);
-    return null;
-  }
-}
-
-// --- 从播放页面提取真实播放地址 ---
-async function extractRealPlayUrl(playPageUrl, site) {
-  try {
-    const playRes = await Widget.http.get(playPageUrl, {
-      headers: { 
-        'User-Agent': UA,
-        'Referer': `${site}/`
-      },
-      timeout: 10000
-    });
-    
-    // 尝试提取iframe的src
-    const iframeRegex = /<iframe[^>]*src="([^"]+)"[^>]*>/;
-    const iframeMatch = playRes.data.match(iframeRegex);
-    
-    if (iframeMatch && iframeMatch[1]) {
-      const iframeSrc = iframeMatch[1];
-      const iframeUrl = iframeSrc.startsWith('http') ? iframeSrc : `${site}${iframeSrc}`;
-      
-      // 获取iframe内容
-      const iframeRes = await Widget.http.get(iframeUrl, {
-        headers: { 
-          'User-Agent': UA,
-          'Referer': playPageUrl,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-        },
-        timeout: 10000
-      });
-      
-      // 尝试提取播放地址
-      const playUrl = extractPlayUrlFromIframe(iframeRes.data);
-      if (playUrl) {
-        return playUrl;
-      }
-    }
-    
-    // 如果没有iframe，尝试直接查找
-    return extractPlayUrlFromIframe(playRes.data);
-    
-  } catch (error) {
-    console.error(`提取真实播放地址失败: ${error.message}`);
-    return null;
-  }
-}
-
-// --- 从iframe内容中提取播放地址 ---
-function extractPlayUrlFromIframe(html) {
-  try {
-    // 方法1: 查找加密数据
-    const dataMatch = html.match(/"data":"([^"]+)"/);
-    if (dataMatch) {
-      const data = dataMatch[1];
-      try {
-        // 尝试解码（原脚本中的方法）
-        const encrypted = data.split('').reverse().join('');
+    // 方法1: 从iframe中提取
+    const iframeMatch = html.match(/<iframe[^>]*src=['"]([^'"]+)['"][^>]*>/);
+    if (iframeMatch) {
+      // 尝试从iframe中提取简单格式的播放地址
+      const dataMatch = html.match(/"data":"([^"]+)"/);
+      if (dataMatch) {
+        const encrypted = dataMatch[1].split('').reverse().join('');
         let temp = '';
         for (let i = 0; i < encrypted.length; i += 2) {
           if (i + 1 < encrypted.length) {
-            const hex = encrypted[i] + encrypted[i + 1];
-            const charCode = parseInt(hex, 16);
-            if (!isNaN(charCode)) {
-              temp += String.fromCharCode(charCode);
-            }
+            temp += String.fromCharCode(parseInt(encrypted[i] + encrypted[i + 1], 16));
           }
         }
-        
         if (temp.length > 7) {
-          const pos = Math.floor((temp.length - 7) / 2);
-          const result = temp.substring(0, pos) + temp.substring(pos + 7);
-          
-          // 检查是否是有效的URL
-          if (result.startsWith('http')) {
-            return result;
-          }
+          const pos = (temp.length - 7) / 2;
+          return temp.substring(0, pos) + temp.substring(pos + 7);
         }
-      } catch (e) {
-        console.error('解密失败:', e.message);
       }
     }
     
-    // 方法2: 直接查找URL
+    // 方法2: 直接查找播放地址
     const urlPatterns = [
-      /url\s*:\s*['"](https?:\/\/[^'"]+)['"]/,
-      /src\s*=\s*['"](https?:\/\/[^'"]+\.(?:m3u8|mp4))['"]/,
-      /(https?:\/\/[^\s"']+\.(?:m3u8|mp4)[^\s"']*)/,
-      /<source[^>]*src="([^"]+)"[^>]*>/,
-      /video[^>]*src="([^"]+)"[^>]*>/
+      /url\s*:\s*['"](https?:\/\/[^'"]+)['"]/i,
+      /src\s*=\s*['"](https?:\/\/[^'"]+\.(?:m3u8|mp4))['"]/i,
+      /(https?:\/\/[^\s"']+\.(?:m3u8|mp4)[^\s"']*)/i
     ];
     
     for (const pattern of urlPatterns) {
@@ -324,21 +218,10 @@ function extractPlayUrlFromIframe(html) {
       }
     }
     
-    // 方法3: 查找mysvg或artUrl
-    const mysvgMatch = html.match(/\bmysvg\b\s*=\s*['"]([^'"]+)['"]/i);
-    if (mysvgMatch) {
-      return mysvgMatch[1];
-    }
-    
-    const artUrlMatch = html.match(/art\.url\s*=\s*['"]([^'"]+)['"]/i);
-    if (artUrlMatch) {
-      return artUrlMatch[1];
-    }
-    
     return null;
     
   } catch (error) {
-    console.error(`从iframe提取播放地址失败: ${error.message}`);
+    console.error(`提取播放地址失败: ${error.message}`);
     return null;
   }
 }
