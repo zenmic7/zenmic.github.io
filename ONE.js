@@ -31,6 +31,14 @@ WidgetMetadata = {
   ],
   modules: [
     {
+      id: "loadResource",
+      title: "ONE资源",
+      functionName: "loadResource",
+      type: "stream",
+      cacheDuration: 600,
+      params: []
+    },
+    {
       id: "search",
       title: "搜索",
       functionName: "search",
@@ -53,6 +61,18 @@ WidgetMetadata = {
   ],
   loadDetail: "loadDetail"
 };
+
+// --- 辅助函数 ---
+function argsify(data) {
+  if (typeof data === 'string') {
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      return {};
+    }
+  }
+  return data;
+}
 
 // --- 搜索函数 ---
 async function search(params) {
@@ -147,6 +167,63 @@ function parseSearchXml(xmlData, token, site) {
   }).filter(Boolean);
   
   return items;
+}
+
+// --- loadResource函数（关键，必须存在）---
+async function loadResource(params) {
+  const { seriesName, episode, season, type = 'tv', token, site } = params;
+  
+  if (!token) {
+    console.error("请先在设置中填入token口令");
+    return [];
+  }
+  
+  if (!seriesName) {
+    console.error("需要提供影片名称");
+    return [];
+  }
+  
+  console.log(`loadResource调用: ${seriesName}, 类型: ${type}`);
+  
+  try {
+    // 首先尝试搜索获取结果
+    const searchResults = await search({ 
+      token, 
+      site, 
+      keyword: seriesName,
+      page: 1 
+    });
+    
+    if (searchResults.length === 0) {
+      console.log(`未找到影片: ${seriesName}`);
+      return [];
+    }
+    
+    // 智能匹配最佳结果
+    const bestMatch = searchResults[0]; // 先简单取第一个
+    console.log(`选择最佳匹配: ${bestMatch.title}`);
+    
+    // 返回结果 - 注意：这里不获取播放地址，只返回基本信息
+    return [{
+      name: "ONE源",
+      description: `${bestMatch.title} - 点击查看详情`,
+      url: bestMatch.ext.detailUrl, // 详情页URL
+      ext: {
+        detailUrl: bestMatch.ext.detailUrl,
+        title: bestMatch.title,
+        mediaType: bestMatch.ext.mediaType || 'tv',
+        // 添加智能匹配信息
+        seriesName: seriesName,
+        season: season,
+        episode: episode,
+        type: type
+      }
+    }];
+    
+  } catch (error) {
+    console.error(`loadResource失败: ${error.message}`);
+    return [];
+  }
 }
 
 // --- 加载详情（关键修复函数）---
@@ -388,24 +465,22 @@ function isValidVideoUrl(url) {
   return validPatterns.some(pattern => pattern.test(urlStr));
 }
 
-// --- 测试函数（可选）---
-async function testPlayback(url) {
-  console.log("=== 测试播放 ===");
-  console.log("测试URL:", url);
+// --- 智能匹配辅助函数（可选）---
+function toChineseNum(num) {
+  const chars = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
+  if (num <= 10) return chars[num];
+  if (num < 20) return "十" + chars[num % 10];
+  return chars[Math.floor(num / 10)] + "十" + (num % 10 === 0 ? "" : chars[num % 10]);
+}
+
+function getPreciseMatch(list, params) {
+  if (!list?.length) return list[0]; // 简单返回第一个
   
-  try {
-    const detail = await loadDetail(url);
-    
-    if (detail && detail.videoUrl) {
-      console.log("播放地址获取成功!");
-      console.log("播放地址:", detail.videoUrl.substring(0, 100) + "...");
-      return true;
-    } else {
-      console.error("无法获取播放地址");
-      return false;
-    }
-  } catch (error) {
-    console.error("测试播放失败:", error);
-    return false;
-  }
+  const { seriesName, season, type } = params;
+  const targetSeason = parseInt(season) || 1;
+  
+  // 这里可以添加您的智能匹配逻辑
+  // 暂时简单返回第一个匹配的结果
+  
+  return list[0];
 }
