@@ -2,7 +2,7 @@
 WidgetMetadata = {
     id: "jianpian_source",
     title: "荐片影视源",
-    version: "1.0.0",
+    version: "2.0.0",
     requiredVersion: "0.0.1",
     description: "荐片影视资源源，支持电影、电视剧、动漫、综艺、纪录片等",
     author: "Adapted",
@@ -12,7 +12,231 @@ WidgetMetadata = {
             name: "imgDomain",
             title: "图片域名（自动获取，无需修改）",
             type: "input",
-            value: ""
+            value: ""// 荐片影视源 - Forward完全兼容版
+// 配置地址：https://ev5356.970xw.com
+
+// 站点配置
+const siteConfig = {
+    site: "https://ev5356.970xw.com",
+    imgDomain: "",
+    categories: [
+        { type_id: "1", type_name: "电影" },
+        { type_id: "2", type_name: "电视剧" },
+        { type_id: "3", type_name: "动漫" },
+        { type_id: "4", type_name: "综艺" },
+        { type_id: "50", type_name: "纪录片" },
+        { type_id: "99", type_name: "Netflix" }
+    ]
+};
+
+// 获取请求头
+function getHeaders() {
+    return {
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 9; V2196A Build/PQ3A.190705.08211809; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36;webank/h5face;webank/1.0;netType:NETWORK_WIFI;appVersion:416;packageName:com.jp3.xg3',
+        'Referer': siteConfig.site
+    };
+}
+
+// 获取图片域名
+async function getImageDomain() {
+    if (siteConfig.imgDomain) return siteConfig.imgDomain;
+    
+    try {
+        const response = await fetch(`${siteConfig.site}/api/appAuthConfig`, {
+            headers: getHeaders()
+        });
+        const data = await response.json();
+        const domain = data.data.imgDomain;
+        siteConfig.imgDomain = domain.startsWith('http') ? domain : 'https://' + domain;
+        return siteConfig.imgDomain;
+    } catch (error) {
+        return "https://default.img.domain";
+    }
+}
+
+// 1. 获取分类列表 - Forward标准格式
+async function getCategory() {
+    const cats = siteConfig.categories.map(cat => ({
+        type_id: cat.type_id,
+        type_name: cat.type_name
+    }));
+    
+    // 返回Forward标准格式
+    return {
+        class: cats
+    };
+}
+
+// 2. 获取视频列表 - Forward标准格式
+async function getList(params) {
+    const { id, page = 1 } = params;
+    const imgDomain = await getImageDomain();
+    const videos = [];
+    
+    try {
+        if (id == 99 || id == 50) {
+            // 纪录片和Netflix
+            if (page > 1) return { list: [] };
+            
+            const url = `${siteConfig.site}/api/dyTag/list?category_id=${id}&page=${page}`;
+            const response = await fetch(url, { headers: getHeaders() });
+            const data = await response.json();
+            
+            if (data.data) {
+                data.data.forEach(category => {
+                    category.dataList.forEach(item => {
+                        videos.push({
+                            vod_id: item.id.toString(),
+                            vod_name: item.title,
+                            vod_pic: imgDomain + item.path,
+                            vod_remarks: item.mask || "",
+                            vod_blurb: category.name || ""
+                        });
+                    });
+                });
+            }
+        } else {
+            // 常规分类
+            const url = `${siteConfig.site}/api/crumb/list?fcate_pid=${id}&area=0&year=0&type=0&sort=updata&page=${page}&category_id=`;
+            const response = await fetch(url, { headers: getHeaders() });
+            const data = await response.json();
+            
+            if (data.data) {
+                data.data.forEach(item => {
+                    videos.push({
+                        vod_id: item.id.toString(),
+                        vod_name: item.title,
+                        vod_pic: imgDomain + item.path,
+                        vod_remarks: item.mask || "",
+                        vod_blurb: item.description || ""
+                    });
+                });
+            }
+        }
+    } catch (error) {
+        console.error("获取列表失败:", error);
+    }
+    
+    return { list: videos };
+}
+
+// 3. 搜索视频 - Forward标准格式
+async function search(params) {
+    const { wd, page = 1 } = params;
+    const imgDomain = await getImageDomain();
+    const videos = [];
+    
+    try {
+        const encodedWd = encodeURIComponent(wd);
+        const url = `${siteConfig.site}/api/v2/search/videoV2?key=${encodedWd}&category_id=88&page=${page}&pageSize=20`;
+        const response = await fetch(url, { headers: getHeaders() });
+        const data = await response.json();
+        
+        if (data.data) {
+            data.data.forEach(item => {
+                videos.push({
+                    vod_id: item.id.toString(),
+                    vod_name: item.title,
+                    vod_pic: imgDomain + item.thumbnail,
+                    vod_remarks: item.mask || "",
+                    vod_blurb: item.description || ""
+                });
+            });
+        }
+    } catch (error) {
+        console.error("搜索失败:", error);
+    }
+    
+    return { list: videos };
+}
+
+// 4. 获取视频详情 - Forward标准格式
+async function getDetail(params) {
+    const { id } = params;
+    const imgDomain = await getImageDomain();
+    
+    try {
+        const url = `${siteConfig.site}/api/video/detailv2?id=${id}`;
+        const response = await fetch(url, { headers: getHeaders() });
+        const data = await response.json();
+        
+        if (data.data) {
+            const detail = data.data;
+            
+            // 提取播放源
+            let playFrom = [];
+            let playUrl = [];
+            
+            if (detail.source_list_source && Array.isArray(detail.source_list_source)) {
+                detail.source_list_source.forEach(source => {
+                    if (source.source_key === 'back_source_list_p2p') return;
+                    
+                    const sourceName = source.name || "播放源";
+                    playFrom.push(sourceName);
+                    
+                    const episodes = [];
+                    if (source.source_list && Array.isArray(source.source_list)) {
+                        source.source_list.forEach(item => {
+                            episodes.push(`${item.source_name || "播放"}$${item.url}`);
+                        });
+                    }
+                    
+                    if (episodes.length > 0) {
+                        playUrl.push(episodes.join('#'));
+                    }
+                });
+            }
+            
+            return {
+                list: [{
+                    vod_id: detail.id.toString(),
+                    vod_name: detail.title || "",
+                    vod_pic: imgDomain + (detail.thumbnail || detail.path || ""),
+                    vod_remarks: detail.mask || "",
+                    vod_blurb: detail.description || "",
+                    vod_content: detail.intro || "",
+                    vod_year: detail.year || "",
+                    vod_area: detail.area || "",
+                    vod_actor: detail.actors || "",
+                    vod_director: detail.director || "",
+                    vod_lang: detail.lang || "",
+                    vod_play_from: playFrom.join('$$$'),
+                    vod_play_url: playUrl.join('$$$')
+                }]
+            };
+        }
+    } catch (error) {
+        console.error("获取详情失败:", error);
+    }
+    
+    return { list: [] };
+}
+
+// Forward标准入口函数
+async function main(type, params = {}) {
+    switch(type) {
+        case "class":
+            return await getCategory();
+        case "list":
+            return await getList(params);
+        case "search":
+            return await search(params);
+        case "detail":
+            return await getDetail(params);
+        default:
+            return { error: "未知操作类型" };
+    }
+}
+
+// 导出函数供Forward调用
+if (typeof module !== 'undefined') {
+    module.exports = { main };
+}
+
+// 浏览器环境测试
+if (typeof window !== 'undefined') {
+    window.jianpianSource = { main };
+}
         }
     ],
     modules: [
