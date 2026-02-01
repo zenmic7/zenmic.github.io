@@ -5,8 +5,8 @@ WidgetMetadata = {
   version: "1.0.0",
   requiredVersion: "0.0.2",
   description: "傲屋动漫在线资源获取",
-  author: "两块",
-  site: "https://github.com/2kuai/ForwardWidgets",
+  author: "Zen",
+  site: "https://github.com/zenmic7",
   globalParams: [
     {
       name: "multiSource",
