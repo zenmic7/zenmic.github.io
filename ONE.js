@@ -5,12 +5,12 @@ const DEFAULT_HEADERS = {
 };
 
 WidgetMetadata = {
-  id: "one_vod_pro_optimized",
-  title: "ONE+",
+  id: "one_vod_pro_fixed",
+  title: "ONE+ 修复版",
   icon: "https://assets.vvebo.vip/scripts/icon.png",
-  version: "2.0.0",
+  version: "2.1.0",
   requiredVersion: "0.0.2",
-  description: "获取One付费资源",
+  description: "ONE资源 - 修复播放错误问题",
   author: "Zen",
   site: "https://vod.infiniteapi.com",
   detailCacheDuration: 1,
@@ -49,44 +49,12 @@ WidgetMetadata = {
           value: '1'
         }
       ]
-    },
-    {
-      id: "loadResource",
-      title: "加载资源",
-      functionName: "loadResource",
-      type: "stream",
-      cacheDuration: 600,
-      params: [
-        {
-          name: "mode",
-          title: "模式",
-          type: "enumeration",
-          value: "search",
-          enumOptions: [
-            { value: "search", title: "智能搜索模式" },
-            { value: "direct", title: "直接播放模式" }
-          ]
-        }
-      ]
     }
   ],
-  // 关键声明：告诉Forward这个脚本有loadDetail函数
   loadDetail: "loadDetail"
 };
 
-// --- 辅助函数 ---
-function argsify(data) {
-  if (typeof data === 'string') {
-    try {
-      return JSON.parse(data);
-    } catch (e) {
-      return {};
-    }
-  }
-  return data;
-}
-
-// --- 搜索函数（不消耗点数）---
+// --- 搜索函数 ---
 async function search(params) {
   const { token, site, keyword, page = 1 } = params;
   
@@ -100,51 +68,29 @@ async function search(params) {
   }
   
   try {
-    // 方法1：尝试JSON API
-    const jsonUrl = `${site}/${token}/one_vod_json_new?ac=videolist&wd=${encodeURIComponent(keyword.trim())}&pg=${page}`;
-    let searchList = [];
+    console.log(`搜索关键词: ${keyword}`);
     
-    try {
-      const searchRes = await Widget.http.get(jsonUrl, {
-        headers: DEFAULT_HEADERS,
-        timeout: 10000
-      });
-      searchList = argsify(searchRes.data);
-    } catch (jsonError) {
-      console.log("JSON API失败，尝试XML API:", jsonError.message);
-    }
+    // 使用XML API搜索
+    const searchUrl = `${site}/${token}/one_vod?wd=${encodeURIComponent(keyword.trim())}&ac=videolist&pg=${page}`;
+    console.log(`搜索URL: ${searchUrl}`);
     
-    // 如果JSON API失败或无结果，尝试XML API
-    if (!searchList || searchList.length === 0) {
-      const xmlUrl = `${site}/${token}/one_vod?wd=${encodeURIComponent(keyword.trim())}&ac=videolist&pg=${page}`;
-      const xmlRes = await Widget.http.get(xmlUrl, {
-        headers: DEFAULT_HEADERS,
-        timeout: 10000
-      });
-      
-      // 解析XML
-      searchList = parseXmlVideoList(xmlRes.data, token, site);
-    }
+    const response = await Widget.http.get(searchUrl, {
+      headers: DEFAULT_HEADERS,
+      timeout: 15000
+    });
     
-    if (!searchList || searchList.length === 0) {
-      console.log(`未找到相关影片: ${keyword}`);
+    if (!response || !response.data) {
+      console.error("搜索返回空数据");
       return [];
     }
     
-    // 转换为Forward期望的格式
-    return searchList.map(item => ({
-      id: String(item.id || Date.now() + Math.random()),
-      title: item.title || item.name || "",
-      description: item.descriptionText || item.year || "",
-      cover: item.coverURLString || item.pic || "",
-      type: "video",
-      ext: {
-        url: item.detailURLString || item.link || "",
-        detailUrl: item.detailURLString || item.link || "",
-        title: item.title || item.name || "",
-        mediaType: (item.type === 'movie' || (item.title && item.title.includes('电影'))) ? 'movie' : 'tv'
-      }
-    }));
+    console.log("搜索返回数据长度:", response.data.length);
+    
+    // 解析XML
+    const items = parseSearchXml(response.data, token, site);
+    console.log(`解析到 ${items.length} 个结果`);
+    
+    return items;
     
   } catch (error) {
     console.error(`搜索失败: ${error.message}`);
@@ -152,11 +98,12 @@ async function search(params) {
   }
 }
 
-// --- 解析XML视频列表 ---
-function parseXmlVideoList(xmlData, token, site) {
+// --- 解析搜索结果的XML ---
+function parseSearchXml(xmlData, token, site) {
   const videoMatches = xmlData.match(/<video>([\s\S]*?)<\/video>/g) || [];
+  console.log(`找到 ${videoMatches.length} 个<video>标签`);
   
-  return videoMatches.map(videoXml => {
+  const items = videoMatches.map((videoXml, index) => {
     try {
       const nameMatch = videoXml.match(/<name><!\[CDATA\[(.*?)\]\]><\/name>/);
       const idMatch = videoXml.match(/<id>(.*?)<\/id>/);
@@ -165,271 +112,300 @@ function parseXmlVideoList(xmlData, token, site) {
       const yearMatch = videoXml.match(/<year>(.*?)<\/year>/);
       const noteMatch = videoXml.match(/<note>(.*?)<\/note>/);
       
-      if (!idMatch) return null;
+      if (!idMatch || !nameMatch) {
+        console.log(`第${index}个视频缺少ID或名称`);
+        return null;
+      }
       
-      const id = idMatch[1];
-      const title = nameMatch ? nameMatch[1] : "";
-      const type = typeMatch ? typeMatch[1] : "unknown";
+      const id = idMatch[1].trim();
+      const title = nameMatch[1].trim();
+      const type = typeMatch ? typeMatch[1].trim() : "unknown";
+      const mediaType = (type === 'movie' || title.includes('电影')) ? 'movie' : 'tv';
+      
+      // 构建详情页URL
+      const detailUrl = `${site}/${token}/one_vod?ac=videolist&ids=${id}`;
+      
+      console.log(`解析到视频: ${title} (ID: ${id}, 类型: ${mediaType})`);
       
       return {
         id: id,
         title: title,
-        name: title, // 兼容字段
-        descriptionText: noteMatch ? noteMatch[1] : (yearMatch ? `年份: ${yearMatch[1]}` : ""),
-        year: yearMatch ? yearMatch[1] : "",
-        type: type,
-        coverURLString: picMatch ? picMatch[1] : "",
-        pic: picMatch ? picMatch[1] : "", // 兼容字段
-        detailURLString: `${site}/${token}/one_vod?ac=videolist&ids=${id}`,
-        link: `${site}/${token}/one_vod?ac=videolist&ids=${id}` // 兼容字段
+        description: noteMatch ? noteMatch[1].trim() : (yearMatch ? `年份: ${yearMatch[1].trim()}` : ""),
+        cover: picMatch ? picMatch[1].trim() : "",
+        type: "video",
+        ext: {
+          url: detailUrl,
+          detailUrl: detailUrl,
+          title: title,
+          mediaType: mediaType
+        }
       };
     } catch (e) {
-      console.error("解析XML失败:", e);
+      console.error(`解析第${index}个视频失败:`, e);
       return null;
     }
   }).filter(Boolean);
+  
+  return items;
 }
 
-// --- 加载详情（只有点击播放时才消耗点数）---
+// --- 加载详情（关键修复函数）---
 async function loadDetail(url) {
   try {
-    console.log("loadDetail调用，URL:", url);
+    console.log("=== loadDetail开始 ===");
+    console.log("详情页URL:", url);
     
+    // 检查URL格式
+    if (!url || !url.includes('one_vod')) {
+      console.error("无效的详情页URL");
+      return null;
+    }
+    
+    // 获取详情页数据
     const response = await Widget.http.get(url, {
       headers: DEFAULT_HEADERS,
-      timeout: 10000
+      timeout: 15000
     });
     
-    return parseDetailXml(response.data);
+    if (!response || !response.data) {
+      console.error("详情页返回空数据");
+      return null;
+    }
+    
+    console.log("详情页数据长度:", response.data.length);
+    
+    // 解析详情页XML
+    const detailResult = parseDetailXml(response.data);
+    
+    if (!detailResult) {
+      console.error("解析详情页失败");
+      return null;
+    }
+    
+    console.log("解析成功，返回详情结果");
+    return detailResult;
+    
   } catch (error) {
     console.error("加载详情失败:", error);
+    console.error("错误堆栈:", error.stack);
     return null;
   }
 }
 
-// --- 解析详情页XML ---
+// --- 解析详情页XML（重点修复）---
 function parseDetailXml(xmlData) {
   try {
+    console.log("=== 开始解析详情XML ===");
+    
+    // 提取基本信息
     const idMatch = xmlData.match(/<id>(.*?)<\/id>/);
     const nameMatch = xmlData.match(/<name><!\[CDATA\[(.*?)\]\]><\/name>/);
-    const ddMatches = xmlData.match(/<dd flag="">\s*<!\[CDATA\[(.*?)\]\]>\s*<\/dd>/g) || [];
+    const typeMatch = xmlData.match(/<type>(.*?)<\/type>/);
     
-    if (ddMatches.length === 0) {
-      console.error("详情页中没有播放数据");
+    const videoId = idMatch ? idMatch[1].trim() : "unknown";
+    const videoName = nameMatch ? nameMatch[1].trim() : "未知影片";
+    const videoType = typeMatch ? typeMatch[1].trim() : "tv";
+    const isMovie = videoType === 'movie';
+    
+    console.log(`影片信息: ID=${videoId}, 名称=${videoName}, 类型=${videoType}, 是电影=${isMovie}`);
+    
+    // 查找播放数据 - 更灵活的匹配方式
+    let playData = null;
+    
+    // 尝试多种匹配方式
+    const ddPatterns = [
+      /<dd[^>]*>\s*<!\[CDATA\[(.*?)\]\]>\s*<\/dd>/g,
+      /<dd>\s*<!\[CDATA\[(.*?)\]\]>\s*<\/dd>/g,
+      /dd.*?<!\[CDATA\[(.*?)\]\]>/g
+    ];
+    
+    for (const pattern of ddPatterns) {
+      const matches = xmlData.match(pattern);
+      if (matches && matches.length > 0) {
+        const contentMatch = matches[0].match(/<!\[CDATA\[(.*?)\]\]>/);
+        if (contentMatch && contentMatch[1]) {
+          playData = contentMatch[1].trim();
+          console.log("找到播放数据，长度:", playData.length);
+          break;
+        }
+      }
+    }
+    
+    if (!playData) {
+      console.error("未找到播放数据");
+      console.log("XML片段:", xmlData.substring(0, 1000));
       return null;
     }
     
-    const firstMatch = ddMatches[0];
-    const contentMatch = firstMatch.match(/<!\[CDATA\[(.*?)\]\]>/);
+    console.log("播放数据前100字符:", playData.substring(0, 100));
     
-    if (!contentMatch) {
-      console.error("无法提取CDATA内容");
+    // 解析播放数据
+    const episodeData = parsePlayData(playData, videoId, videoName, isMovie);
+    
+    if (!episodeData) {
+      console.error("解析播放数据失败");
       return null;
     }
     
-    const content = contentMatch[1];
-    const episodes = content.split('#').filter(Boolean);
+    // 构建Forward要求的返回格式
+    const result = {
+      id: videoId,
+      type: 'detail',
+      mediaType: isMovie ? 'movie' : 'tv',
+      title: videoName,
+      playerType: "app"
+    };
     
-    // 电影：单集
-    if (episodes.length === 1) {
+    if (isMovie) {
+      // 电影格式
+      if (episodeData.videoUrl) {
+        result.videoUrl = episodeData.videoUrl;
+        console.log("电影播放地址:", episodeData.videoUrl.substring(0, 80) + "...");
+      }
+    } else {
+      // 电视剧格式
+      if (episodeData.episodeItems && episodeData.episodeItems.length > 0) {
+        result.videoUrl = episodeData.episodeItems[0].videoUrl;
+        result.episodeItems = episodeData.episodeItems;
+        result.episode = episodeData.episodeItems.length;
+        console.log(`电视剧共${episodeData.episodeItems.length}集，第一集地址: ${episodeData.episodeItems[0].videoUrl.substring(0, 80)}...`);
+      }
+    }
+    
+    console.log("=== 解析完成 ===");
+    return result;
+    
+  } catch (error) {
+    console.error("解析详情XML时出错:", error);
+    console.error("错误堆栈:", error.stack);
+    return null;
+  }
+}
+
+// --- 解析播放数据 ---
+function parsePlayData(playData, videoId, videoName, isMovie) {
+  try {
+    console.log("解析播放数据...");
+    
+    // 清理数据
+    let cleanData = playData
+      .replace(/\r\n/g, '#')
+      .replace(/\n/g, '#')
+      .replace(/\r/g, '#');
+    
+    // 分割剧集
+    const episodes = cleanData.split('#').filter(item => {
+      return item && item.includes('$') && item.trim().length > 5;
+    });
+    
+    console.log(`分割出 ${episodes.length} 个剧集`);
+    
+    if (episodes.length === 0) {
+      console.error("没有有效的剧集数据");
+      return null;
+    }
+    
+    // 电影情况
+    if (isMovie || episodes.length === 1) {
       const parts = episodes[0].split('$');
       if (parts.length >= 2) {
-        const title = parts[0] || (nameMatch ? nameMatch[1] : "ONE电影");
-        const playUrl = parts[1];
+        const title = parts[0].trim() || videoName;
+        const videoUrl = parts[1].trim();
         
-        console.log("解析到电影播放地址:", playUrl.substring(0, 50) + "...");
+        // 验证URL格式
+        if (!isValidVideoUrl(videoUrl)) {
+          console.error("无效的视频URL:", videoUrl);
+          return null;
+        }
         
+        console.log("电影解析成功:", title);
         return {
-          id: idMatch ? idMatch[1] : "unknown",
-          type: 'detail',
-          mediaType: 'movie',
-          title: title,
-          videoUrl: playUrl,
-          playerType: "app"
+          videoUrl: videoUrl,
+          title: title
         };
       }
     }
-    // 电视剧：多集
-    else {
-      const episodeItems = episodes.map((episodeString, index) => {
-        const parts = episodeString.split('$');
-        if (parts.length >= 2) {
-          return {
-            id: `${idMatch ? idMatch[1] : 'unknown'}|${index}`,
-            type: 'detail',
-            title: parts[0] || `第 ${index + 1} 集`,
-            videoUrl: parts[1],
+    
+    // 电视剧情况
+    const episodeItems = [];
+    
+    for (let i = 0; i < episodes.length; i++) {
+      const episode = episodes[i];
+      const parts = episode.split('$');
+      
+      if (parts.length >= 2) {
+        const epTitle = parts[0].trim() || `第 ${i + 1} 集`;
+        const epUrl = parts[1].trim();
+        
+        if (isValidVideoUrl(epUrl)) {
+          episodeItems.push({
+            id: `${videoId}|${i}`,
+            title: epTitle,
+            videoUrl: epUrl,
             mediaType: 'episode'
-          };
+          });
+          
+          console.log(`剧集 ${i+1}: ${epTitle}`);
+        } else {
+          console.warn(`剧集 ${i+1} URL无效: ${epUrl.substring(0, 50)}...`);
         }
-        return null;
-      }).filter(item => item && item.videoUrl);
-      
-      if (episodeItems.length === 0) {
-        console.error("没有有效的剧集");
-        return null;
       }
-      
-      console.log(`解析到${episodeItems.length}集剧集`);
-      
-      return {
-        id: idMatch ? idMatch[1] : "unknown",
-        type: 'detail',
-        mediaType: 'tv',
-        title: nameMatch ? nameMatch[1] : "ONE剧集",
-        videoUrl: episodeItems[0].videoUrl,
-        episodeItems: episodeItems,
-        playerType: "app",
-        episode: episodeItems.length
-      };
     }
+    
+    if (episodeItems.length === 0) {
+      console.error("没有有效的剧集");
+      return null;
+    }
+    
+    console.log(`共解析 ${episodeItems.length} 个有效剧集`);
+    return {
+      episodeItems: episodeItems
+    };
+    
   } catch (error) {
-    console.error("解析详情XML失败:", error);
+    console.error("解析播放数据失败:", error);
     return null;
   }
 }
 
-// --- 智能匹配算法（可选保留）---
-function toChineseNum(num) {
-  const chars = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
-  if (num <= 10) return chars[num];
-  if (num < 20) return "十" + chars[num % 10];
-  return chars[Math.floor(num / 10)] + "十" + (num % 10 === 0 ? "" : chars[num % 10]);
+// --- 验证视频URL是否有效 ---
+function isValidVideoUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  
+  const urlStr = url.trim().toLowerCase();
+  
+  // 常见视频格式和协议
+  const validPatterns = [
+    /^https?:\/\//,  // http/https协议
+    /\.m3u8($|\?)/,  // m3u8文件
+    /\.mp4($|\?)/,   // mp4文件
+    /\.flv($|\?)/,   // flv文件
+    /\.ts($|\?)/,    // ts文件
+    /rtmp:\/\//,     // rtmp协议
+    /rtsp:\/\//      // rtsp协议
+  ];
+  
+  return validPatterns.some(pattern => pattern.test(urlStr));
 }
 
-// --- 兼容原loadResource函数 ---
-async function loadResource(params) {
-  const { seriesName, episode, season, type = 'tv', token, site, mode = 'search' } = params;
-  
-  if (!token) {
-    console.error("请先在设置中填入token口令");
-    return [];
-  }
-  
-  if (!seriesName) {
-    console.error("需要提供影片名称");
-    return [];
-  }
-  
-  // 模式1：智能搜索模式（先搜索，再匹配）
-  if (mode === 'search') {
-    // 先搜索
-    const searchResults = await search({ 
-      token, 
-      site, 
-      keyword: seriesName,
-      page: 1 
-    });
-    
-    if (searchResults.length === 0) {
-      console.log(`未找到影片: ${seriesName}`);
-      return [];
-    }
-    
-    // 简单的智能匹配（可以后续完善）
-    let bestMatch = searchResults[0];
-    
-    // 返回结果（现在只返回基本信息，不获取播放地址）
-    return [{
-      name: "ONE",
-      description: `${bestMatch.title} - 点击查看详情`,
-      url: bestMatch.ext.detailUrl, // 这里是详情页URL，不是播放地址
-      ext: {
-        detailUrl: bestMatch.ext.detailUrl,
-        title: bestMatch.title,
-        mediaType: bestMatch.ext.mediaType
-      }
-    }];
-  }
-  
-  // 模式2：直接播放模式（原逻辑，消耗点数）
-  console.log("使用直接播放模式，可能会消耗点数");
+// --- 测试函数（可选）---
+async function testPlayback(url) {
+  console.log("=== 测试播放 ===");
+  console.log("测试URL:", url);
   
   try {
-    // 这里是您的原逻辑，会消耗点数
-    const searchUrl = `${site}/${token}/one_vod_json_new?ac=videolist&wd=${encodeURIComponent(seriesName)}`;
-    const searchRes = await Widget.http.get(searchUrl, {
-      headers: DEFAULT_HEADERS,
-      timeout: 10000
-    });
+    const detail = await loadDetail(url);
     
-    const searchList = argsify(searchRes.data);
-    if (!searchList || searchList.length === 0) {
-      return [];
-    }
-    
-    // 智能匹配（简化版）
-    const bestMatch = searchList[0];
-    
-    // 获取详情
-    const detailRes = await Widget.http.get(bestMatch.detailURLString, {
-      headers: DEFAULT_HEADERS,
-      timeout: 10000
-    });
-    
-    const episodes = argsify(detailRes.data);
-    if (!episodes || episodes.length === 0) {
-      return [];
-    }
-    
-    // 获取播放地址（这里会消耗点数）
-    const playInfo = await getOneSourcePlayInfo(episodes[0].episodeDetailURL);
-    if (playInfo && playInfo.url) {
-      return [{
-        name: "ONE源",
-        description: `${bestMatch.title} - 正片`,
-        url: playInfo.url
-      }];
-    }
-    
-    return [];
-    
-  } catch (error) {
-    console.error(`加载资源失败: ${error.message}`);
-    return [];
-  }
-}
-
-// --- 获取播放地址函数（原逻辑，消耗点数）---
-async function getOneSourcePlayInfo(url) {
-  try {
-    const res = await Widget.http.get(url, {
-      headers: DEFAULT_HEADERS,
-      timeout: 8000
-    });
-    
-    const data = argsify(res.data);
-    if (data && data.playurl) {
-      return { url: data.playurl };
-    }
-    return null;
-  } catch (error) {
-    console.error(`获取播放信息失败: ${error.message}`);
-    return null;
-  }
-}
-
-// --- 初始化和测试代码 ---
-async function testConnection(params) {
-  const { token, site } = params;
-  
-  if (!token) {
-    return "请先设置token";
-  }
-  
-  try {
-    const testUrl = `${site}/${token}/one_vod?ac=videolist&pg=1`;
-    const response = await Widget.http.get(testUrl, {
-      headers: DEFAULT_HEADERS,
-      timeout: 5000
-    });
-    
-    if (response && response.data) {
-      return "连接成功！可以正常使用ONE源";
+    if (detail && detail.videoUrl) {
+      console.log("播放地址获取成功!");
+      console.log("播放地址:", detail.videoUrl.substring(0, 100) + "...");
+      return true;
     } else {
-      return "连接失败，请检查token和网络";
+      console.error("无法获取播放地址");
+      return false;
     }
   } catch (error) {
-    return `连接失败: ${error.message}`;
+    console.error("测试播放失败:", error);
+    return false;
   }
 }
