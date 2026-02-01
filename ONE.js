@@ -6,11 +6,11 @@ const DEFAULT_HEADERS = {
 
 WidgetMetadata = {
   id: "one_vod_pro_optimized",
-  title: "ONE+ 优化版",
+  title: "ONE+",
   icon: "https://assets.vvebo.vip/scripts/icon.png",
   version: "2.0.0",
   requiredVersion: "0.0.2",
-  description: "获取One付费资源 - 优化版不消耗点数",
+  description: "获取One付费资源",
   author: "Zen",
   site: "https://vod.infiniteapi.com",
   detailCacheDuration: 1,
