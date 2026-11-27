@@ -11661,7 +11661,7 @@ WidgetMetadata = {
     title: "豆瓣弹幕",
     description: "多平台弹幕聚合 + 豆瓣书影音自动同步（CookieCloud 自动获取 dbcl2）",
     author: "Zen",
-    version: "0.1.0",
+    version: "0.1.1",
     site: "https://github.com/zenmic7/zenmic.github.io/blob/ForwardWidget/danmu.js",
     requiredVersion: "0.0.2",
     globalParams: [
@@ -11785,7 +11785,7 @@ WidgetMetadata = {
             title: "豆瓣书影音档案（实验性）",
             name: "global.experimental.doubanHistory.enabled",
             description: "是否开启自动同步豆瓣书影音档案",
-            value: "false",
+            value: "true",
             type: "enumeration",
             enumOptions: [
                 {
@@ -11814,7 +11814,7 @@ WidgetMetadata = {
             title: "CookieCloud 自动同步 dbcl2",
             name: "global.experimental.doubanHistory.cookiecloud.enabled",
             description: "开启后自动从 CookieCloud 读取豆瓣 dbcl2，无需手工填写",
-            value: "false",
+            value: "true",
             type: "enumeration",
             enumOptions: [
                 {
