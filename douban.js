@@ -1,10 +1,10 @@
 // 豆瓣个性化推荐（CookieCloud 自动提供登录态）
 WidgetMetadata = {
-  id: "douban",
+  id: "zen.douban.recommend",
   title: "豆瓣个性化推荐",
   description: "根据豆瓣个人口味生成推荐列表；登录态由 CookieCloud 自动获取，无需手工粘贴 Cookie",
   author: "Zen",
-  version: "0.1.0",
+  version: "0.1.1",
   site: "https://github.com/zenmic7/zenmic.github.io/blob/ForwardWidget/douban.js",
   requiredVersion: "0.0.1",
   modules: [
