@@ -11657,11 +11657,11 @@ function sv(e, t) {
     }), e;
 }
 WidgetMetadata = {
-    id: "baranwang.danmu.universe",
+    id: "zen.douban.danmu",
     title: "豆瓣弹幕",
     description: "多平台弹幕聚合 + 豆瓣书影音自动同步（CookieCloud 自动获取 dbcl2）",
     author: "Zen",
-    version: "0.1.1",
+    version: "0.1.2",
     site: "https://github.com/zenmic7/zenmic.github.io/blob/ForwardWidget/danmu.js",
     requiredVersion: "0.0.2",
     globalParams: [
