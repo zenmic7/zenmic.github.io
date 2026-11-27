@@ -5340,13 +5340,21 @@ class nD {
     }
     setStatus(e, t, r) {
         return nT(function*() {
-            let n = yield this.getCK(), i = yield this.fetch.post(`https://m.douban.com/rexxar/api/v2/${e}/${t}/${r}`, nz.qs.stringify({
+            let n = yield this.getCK(), ccCfg = null != this.config.customComment ? String(this.config.customComment).trim() : "", ccKeep = "";
+            try {
+                let ccCur = yield this.fetch.get(`https://m.douban.com/rexxar/api/v2/${e}/${t}/interest?ck=${n}`);
+                ccKeep = ccCur && ccCur.data && ccCur.data.comment ? String(ccCur.data.comment) : "";
+            } catch (ccErr) {
+                ccDiag("读短评失败");
+            }
+            let ccBody = {
                 ck: n,
                 tags: "",
-                comment: this.config.customComment,
                 sync_douban: 1,
                 rating: 0
-            }), {
+            }, ccText = ccCfg || ccKeep;
+            ccText && (ccBody.comment = ccText), ccDiag("comment=" + (ccCfg ? "配置" : ccKeep ? "保留已有" : "无"));
+            let i = yield this.fetch.post(`https://m.douban.com/rexxar/api/v2/${e}/${t}/${r}`, nz.qs.stringify(ccBody), {
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",
                     Referer: `https://m.douban.com/movie/subject/${t}/`
@@ -11650,11 +11658,11 @@ function sv(e, t) {
 }
 WidgetMetadata = {
     id: "baranwang.danmu.universe",
-    title: "通用弹幕",
-    description: "通用弹幕插件，支持腾讯、优酷、爱奇艺、哔哩哔哩、人人视频等平台",
-    author: "Baran",
-    version: "0.15.8",
-    site: "https://github.com/baranwang/forward-widget/tree/main/apps/danmu-universe",
+    title: "豆瓣弹幕",
+    description: "多平台弹幕聚合 + 豆瓣书影音自动同步（CookieCloud 自动获取 dbcl2）",
+    author: "Zen",
+    version: "0.1.0",
+    site: "https://github.com/zenmic7/zenmic.github.io/blob/ForwardWidget/danmu.js",
     requiredVersion: "0.0.2",
     globalParams: [
         {
